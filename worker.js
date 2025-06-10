@@ -19,27 +19,6 @@ async function sign(s3, bucket, path, method) {
   return signed.url;
 }
 
-function parseAuthorization(req) {
-  const auth = req.headers.get("Authorization");
-  if (!auth) {
-    throw new Response(null, { status: 401 });
-  }
-
-  const [scheme, encoded] = auth.split(" ");
-  if (scheme !== "Basic" || !encoded) {
-    throw new Response(null, { status: 400 });
-  }
-
-  const buffer = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
-  const decoded = new TextDecoder().decode(buffer).normalize();
-  const index = decoded.indexOf(":");
-  if (index === -1 || /[\0-\x1F\x7F]/.test(decoded)) {
-    throw new Response(null, { status: 400 });
-  }
-
-  return { user: decoded.slice(0, index), pass: decoded.slice(index + 1) };
-}
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -60,8 +39,11 @@ export default {
       return new Response(null, { status: 405, headers: { "Allow": "POST" } });
     }
 
-    const { user, pass } = parseAuthorization(request);
-    let s3Options = { accessKeyId: user, secretAccessKey: pass };
+    // Use secrets from environment variables
+    let s3Options = {
+      accessKeyId: env.ACCESS_KEY_ID,
+      secretAccessKey: env.SECRET_ACCESS_KEY
+    };
 
     const segments = url.pathname.split("/").slice(1, -2);
     let params = {};
