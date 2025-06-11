@@ -16,15 +16,12 @@ async function sign(s3, bucket, path, method) {
     new Request(`https://${bucket}/${path}?X-Amz-Expires=${EXPIRY}`, info),
     { aws: { signQuery: true } }
   );
-  // Log the signed URL for debugging
-  console.log(`[sign] Generated signed URL for ${method} ${bucket}/${path}: ${signed.url}`);
   return signed.url;
 }
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    console.log(`[fetch] Incoming request: ${request.method} ${url.pathname}`);
 
     if (url.pathname == "/") {
       if (request.method === "GET") {
@@ -48,9 +45,6 @@ export default {
       secretAccessKey: env.SECRET_ACCESS_KEY
     };
 
-    // Log S3 options (excluding secrets)
-    console.log(`[fetch] S3 options: { accessKeyId: ${env.ACCESS_KEY_ID}, ... }`);
-
     const segments = url.pathname.split("/").slice(1, -2);
     let params = {};
     let bucketIdx = 0;
@@ -62,6 +56,7 @@ export default {
         const key = decodeURIComponent(segment.slice(0, sliceIdx));
         const val = decodeURIComponent(segment.slice(sliceIdx + 1));
         s3Options[key] = val;
+
         bucketIdx++;
       }
     }
@@ -71,24 +66,17 @@ export default {
     const expires_in = params.expiry || env.EXPIRY || EXPIRY;
 
     const { objects, operation } = await request.json();
-    console.log(`[fetch] Operation: ${operation}, Objects: ${objects.length}`);
     const method = METHOD_FOR[operation];
     const response = JSON.stringify({
       transfer: "basic",
-      objects: await Promise.all(objects.map(async ({ oid, size }) => {
-        const href = await sign(s3, bucket, oid, method);
-        return {
-          oid, size,
-          authenticated: true,
-          actions: {
-            [operation]: { href, expires_in },
-          },
-        };
-      })),
+      objects: await Promise.all(objects.map(async ({ oid, size }) => ({
+        oid, size,
+        authenticated: true,
+        actions: {
+          [operation]: { href: await sign(s3, bucket, oid, method), expires_in },
+        },
+      }))),
     });
-
-    // Log the response (truncated if too long)
-    console.log(`[fetch] Response: ${response.length > 500 ? response.slice(0, 500) + '...' : response}`);
 
     return new Response(response, {
       status: 200,
