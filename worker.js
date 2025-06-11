@@ -63,7 +63,7 @@ export default {
 
     const s3 = new AwsClient(s3Options);
     const bucket = segments.slice(bucketIdx).join("/");
-    const expires_in = params.expiry || env.EXPIRY || EXPIRY;
+    const expires_in = parseInt(params.expiry || env.EXPIRY || EXPIRY, 10);
 
     const { objects, operation } = await request.json();
     const method = METHOD_FOR[operation];
